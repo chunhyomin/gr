@@ -1,3 +1,449 @@
+<details>
+<summary>코드 펼치기/접기</summary>
+
+```c++
+#include <windows.h>
+#include <GL/gl.h>
+#pragma comment(lib, "opengl32.lib")
+
+LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_DESTROY) PostQuitMessage(0);
+    return DefWindowProc(h, m, w, l);
+}
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    WNDCLASS wc = {};
+    wc.style = CS_OWNDC;
+    wc.lpfnWndProc = WndProc;
+    wc.hInstance = hInstance;
+    wc.lpszClassName = L"GL";
+
+    RegisterClass(&wc);
+
+    HWND win = CreateWindow(
+        L"GL", L"OpenGL Rainbow Quad",
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        100, 100, 800, 600,
+        nullptr, nullptr, hInstance, nullptr
+    );
+
+    HDC dc = GetDC(win);
+
+    PIXELFORMATDESCRIPTOR pfd = {
+        sizeof(PIXELFORMATDESCRIPTOR),
+        1,
+        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+        PFD_TYPE_RGBA,
+        32,
+        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0,
+        24, 8, 0,
+        PFD_MAIN_PLANE,
+        0, 0, 0, 0
+    };
+
+    int pf = ChoosePixelFormat(dc, &pfd);
+    SetPixelFormat(dc, pf, &pfd);
+
+    HGLRC rc = wglCreateContext(dc);
+    wglMakeCurrent(dc, rc);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    MSG msg = {};
+    while (msg.message != WM_QUIT) {
+        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            DispatchMessage(&msg);
+        }
+
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glBegin(GL_QUADS);
+        glColor3f(1.0f, 0.0f, 0.0f);   glVertex2f(-0.5f, 0.5f);   // 빨강
+        glColor3f(1.0f, 1.0f, 0.0f);   glVertex2f(0.5f, 0.5f);    // 노랑
+        glColor3f(0.0f, 0.0f, 1.0f);   glVertex2f(0.5f, -0.5f);   // 파랑
+        glColor3f(0.5f, 0.0f, 1.0f);   glVertex2f(-0.5f, -0.5f);  // 보라
+        glEnd();
+
+        SwapBuffers(dc);
+        Sleep(16);
+    }
+
+    wglMakeCurrent(nullptr, nullptr);
+    wglDeleteContext(rc);
+    ReleaseDC(win, dc);
+    DestroyWindow(win);
+
+    return 0;
+}
+
+```
+</details>
+
+<details>
+<summary>코드 펼치기/접기</summary>
+
+```c++
+#include <windows.h>
+#include <d3d11.h>
+#include <d3dcompiler.h>
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+
+IDXGISwapChain* sc;
+ID3D11Device* dev;
+ID3D11DeviceContext* ctx;
+ID3D11RenderTargetView* rtv;
+
+// 정점 구조체
+struct Vertex {
+    float x, y;
+    float u, v;
+};
+
+ID3D11VertexShader* vs;
+ID3D11PixelShader* ps;
+ID3D11Buffer* vb;
+ID3D11InputLayout* il;
+
+LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_DESTROY) PostQuitMessage(0);
+    return DefWindowProc(h, m, w, l);
+}
+
+int WINAPI WinMain(HINSTANCE h, HINSTANCE, LPSTR, int) {
+    // 윈도우 클래스 등록 및 생성
+    WNDCLASS wc = { CS_OWNDC, WndProc, 0, 0, h, 0, 0, 0, 0, L"D3D" };
+    RegisterClass(&wc);
+    HWND win = CreateWindow(L"D3D", 0, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        100, 100, 800, 600, 0, 0, h, 0);
+
+    // 스왑체인 생성
+    DXGI_SWAP_CHAIN_DESC sd = {};
+    sd.BufferCount = 1;
+    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.OutputWindow = win;
+    sd.SampleDesc.Count = 1;
+    sd.Windowed = TRUE;
+
+    D3D11CreateDeviceAndSwapChain(
+        0, D3D_DRIVER_TYPE_HARDWARE, 0, 0, 0, 0, D3D11_SDK_VERSION,
+        &sd, &sc, &dev, 0, &ctx
+    );
+
+    // 렌더타겟 뷰 생성
+    ID3D11Texture2D* bb;
+    sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&bb);
+    dev->CreateRenderTargetView(bb, 0, &rtv);
+    bb->Release();
+    ctx->OMSetRenderTargets(1, &rtv, 0);
+
+    // 뷰포트 설정
+    D3D11_VIEWPORT vp = {};
+    vp.Width = 800;
+    vp.Height = 600;
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    vp.TopLeftX = 0;
+    vp.TopLeftY = 0;
+    ctx->RSSetViewports(1, &vp);
+
+    // 전체 화면을 덮는 정점 데이터 (Triangle Strip)
+    Vertex vertices[] = {
+        { -1,  1, 0, 0 },  // 좌상단
+        {  1,  1, 1, 0 },  // 우상단
+        { -1, -1, 0, 1 },  // 좌하단
+        {  1, -1, 1, 1 },  // 우하단
+    };
+
+    // 정점 버퍼 생성
+    D3D11_BUFFER_DESC bd = {};
+    bd.ByteWidth = sizeof(vertices);
+    bd.Usage = D3D11_USAGE_DEFAULT;
+    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    D3D11_SUBRESOURCE_DATA srd = {};
+    srd.pSysMem = vertices;
+    dev->CreateBuffer(&bd, &srd, &vb);
+
+    // 셰이더 코드 (HLSL)
+    const char* vsCode = R"(
+        struct VS_OUT { float4 pos : SV_POSITION; float2 uv : TEXCOORD; };
+        VS_OUT main(float2 pos : POSITION, float2 uv : TEXCOORD) {
+            VS_OUT o;
+            o.pos = float4(pos, 0, 1);
+            o.uv = uv;
+            return o;
+        })";
+
+    const char* psCode = R"(
+        float4 main(float4 pos : SV_POSITION, float2 uv : TEXCOORD) : SV_TARGET {
+            float t = uv.x; // X축 기준 그라데이션
+            // HSV to RGB 변환의 단순화 버전 (무지개)
+            float r = sin(t * 6.28318 + 0.0) * 0.5 + 0.5;
+            float g = sin(t * 6.28318 + 2.094) * 0.5 + 0.5;
+            float b = sin(t * 6.28318 + 4.188) * 0.5 + 0.5;
+            return float4(r, g, b, 1.0);
+        })";
+
+    // 셰이더 컴파일
+    ID3DBlob* vsBlob = nullptr, * psBlob = nullptr;
+    D3DCompile(vsCode, strlen(vsCode), 0, 0, 0, "main", "vs_5_0", 0, 0, &vsBlob, 0);
+    D3DCompile(psCode, strlen(psCode), 0, 0, 0, "main", "ps_5_0", 0, 0, &psBlob, 0);
+
+    // 셰이더 객체 생성
+    dev->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), 0, &vs);
+    dev->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), 0, &ps);
+
+    // 입력 레이아웃 생성
+    D3D11_INPUT_ELEMENT_DESC layout[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+    dev->CreateInputLayout(layout, 2, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &il);
+
+    // 컴파일된 셰이더 블롭 해제
+    vsBlob->Release();
+    psBlob->Release();
+
+    // 메시지 루프
+    MSG msg = {};
+    while (msg.message != WM_QUIT) {
+        if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) DispatchMessage(&msg);
+
+        // 배경 클리어
+        float clear[4] = { 0, 0, 0, 1 };
+        ctx->ClearRenderTargetView(rtv, clear);
+
+        // 셰이더 및 버퍼 바인딩
+        UINT stride = sizeof(Vertex), offset = 0;
+        ctx->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+        ctx->IASetInputLayout(il);
+        ctx->VSSetShader(vs, 0, 0);
+        ctx->PSSetShader(ps, 0, 0);
+        ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+        // 사각형 그리기
+        ctx->Draw(4, 0);
+
+        sc->Present(1, 0);
+    }
+
+    // 리소스 해제
+    vb->Release();
+    vs->Release();
+    ps->Release();
+    il->Release();
+    rtv->Release();
+    sc->Release();
+    ctx->Release();
+    dev->Release();
+    return 0;
+}
+
+```
+</details>
+
+<details>
+<summary>코드 펼치기/접기</summary>
+
+```c++
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Three.js Cube - 무지개 색</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 320px;
+      height: 240px;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // 기본 설정
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, 320 / 240, 0.1, 1000); // 카메라 비율도 320:240 고정
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(320, 240); // 320x240 고정
+    renderer.setClearColor('gray'); // CSS 색 이름도 가능
+    document.body.appendChild(renderer.domElement);
+
+    // 큐브 만들기
+    const geometry = new THREE.BoxGeometry(2,2,2);
+
+    // 무지개 색을 입히기 위한 ShaderMaterial
+    const material = new THREE.ShaderMaterial({
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv; // uv 좌표를 프래그먼트 셰이더로 전달
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        void main() {
+          // 무지개 색을 만드려면 sin을 사용해서 색상 변화를 줍니다.
+          float r = sin(vUv.x * 6.28318 + 0.0) * 0.5 + 0.5;
+          float g = sin(vUv.x * 6.28318 + 2.094) * 0.5 + 0.5;
+          float b = sin(vUv.x * 6.28318 + 4.188) * 0.5 + 0.5;
+          gl_FragColor = vec4(r, g, b, 1.0); // RGB 값을 조합하여 색상 생성
+        }
+      `
+    });
+
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+
+    // 큐브를 45도(x, y축) 회전
+    cube.rotation.x = Math.PI / 4;
+    cube.rotation.y = Math.PI / 4;
+
+    // 조명 추가
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5, 5, 5);
+    scene.add(light);
+
+    const ambientLight = new THREE.AmbientLight(0x404040);
+    scene.add(ambientLight);
+
+    // 카메라 위치 조정
+    camera.position.set(0, 0, 5);
+
+    // 단순 렌더링
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
+
+```
+</details>
+
+<details>
+<summary>코드 펼치기/접기</summary>
+
+```c++
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Three.js WebGPU - Bright Rainbow Cube</title>
+    <style>
+      body { margin: 0; overflow: hidden; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+
+  <body>
+    <script type="module">
+      import * as THREE from 'three';
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+      import WebGPURenderer from 'three/addons/renderers/webgpu/WebGPURenderer.js';
+
+      function isWebGPUSupported() {
+        return !!navigator.gpu;
+      }
+
+      if (isWebGPUSupported()) {
+        const renderer = new WebGPURenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111); // 어두운 배경에서 색이 더 도드라짐
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.z = 3;
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        const geometry = new THREE.BoxGeometry();
+        const colors = [];
+
+        const rainbow = [
+          new THREE.Color('#ff0000'), // 빨강
+          new THREE.Color('#ff7f00'), // 주황
+          new THREE.Color('#ffff00'), // 노랑
+          new THREE.Color('#00ff00'), // 초록
+          new THREE.Color('#0000ff'), // 파랑
+          new THREE.Color('#4b0082'), // 남색
+          new THREE.Color('#8b00ff')  // 보라
+        ];
+
+        // 큐브 정점마다 무지개 색 배정 (선명하게 보이도록)
+        for (let i = 0; i < geometry.attributes.position.count; i++) {
+          const color = rainbow[i % rainbow.length];
+          colors.push(color.r, color.g, color.b);
+        }
+
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+        const material = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.3, roughness: 0.4 });
+
+        const cube = new THREE.Mesh(geometry, material);
+        scene.add(cube);
+
+        // 밝은 방향광과 주변광 추가
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        directionalLight.position.set(3, 5, 5);
+        scene.add(directionalLight);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        function animate() {
+          requestAnimationFrame(animate);
+          cube.rotation.x += 0.01;
+          cube.rotation.y += 0.01;
+          controls.update();
+          renderer.render(scene, camera);
+        }
+
+        animate();
+      } else {
+        document.body.innerHTML = `<h2 style="color:red;">WebGPU not supported in this browser.</h2>`;
+      }
+    </script>
+  </body>
+</html>
+
+```
+</details>
+
+<details>
 <summary>코드 펼치기/접기</summary>
 
 ```c++
