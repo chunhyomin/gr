@@ -1,3 +1,4 @@
+![실습](./OpenGL%20실습.png)
 <details>
 <summary>코드 펼치기/접기</summary>
 
@@ -83,6 +84,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 ```
 </details>
+
+![실습](./DirectX%20실습.png) 
 
 <details>
 <summary>코드 펼치기/접기</summary>
@@ -248,6 +251,8 @@ int WINAPI WinMain(HINSTANCE h, HINSTANCE, LPSTR, int) {
 ```
 </details>
 
+![실습](./WebGL%20실습.png)
+
 <details>
 <summary>코드 펼치기/접기</summary>
 
@@ -343,6 +348,8 @@ int WINAPI WinMain(HINSTANCE h, HINSTANCE, LPSTR, int) {
 
 ```
 </details>
+
+![실습](./WebGPU%20실습.png)
 
 <details>
 <summary>코드 펼치기/접기</summary>
@@ -442,6 +449,8 @@ int WINAPI WinMain(HINSTANCE h, HINSTANCE, LPSTR, int) {
 
 ```
 </details>
+
+![실습](./Vulkan%20실습.png)
 
 <details>
 <summary>코드 펼치기/접기</summary>
